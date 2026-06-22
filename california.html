@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>California Library Quest</title>
+<meta name="description" content="An interactive map of every California public library system you can join to unlock more ebooks and audiobooks in Libby. Track the cards you've collected.">
+<link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;text y='.9em' font-size='90'&gt;📚&lt;/text&gt;&lt;/svg&gt;">
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 <style>
@@ -67,9 +69,13 @@
   .popup .m{color:var(--muted);font-size:11px;line-height:1.35}
   .popup .note{margin-top:8px;padding:7px 8px;border-radius:8px;background:#1b2333;color:#dfe6f2;line-height:1.35}
   .popup .warn{background:#2b1d16;color:#ffd5bd}
-  .popup .actions{display:flex;align-items:center;gap:9px;margin-top:10px;flex-wrap:wrap}
-  .popup .collect{background:var(--gold);border:none;color:#1a1a1a;border-radius:7px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer}
-  .popup a{color:var(--accent);font-weight:700;text-decoration:none}
+  .popup .actions{display:flex;flex-direction:column;gap:7px;margin-top:11px}
+  .popup .collect{width:100%;background:var(--gold);border:none;color:#1a1a1a;border-radius:8px;padding:0 12px;min-height:44px;font-size:13px;font-weight:700;cursor:pointer}
+  .popup .collect:active{filter:brightness(.94)}
+  .popup .linkbtn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:44px;background:#0b0e14;border:1px solid var(--line);border-radius:8px;padding:0 12px;color:var(--accent);font-weight:700;font-size:13px;text-decoration:none}
+  .popup .linkbtn:hover{border-color:var(--accent);background:#151c2b}
+  .popup .linkbtn:active{background:#1b2333}
+  .popup .linkbtn .ext{color:var(--muted);font-size:14px;flex:none}
   /* on-map key */
   .legend{position:absolute;right:12px;bottom:12px;background:rgba(13,17,26,.92);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:11px;max-width:300px;box-shadow:0 6px 20px rgba(0,0,0,.45)}
   .legend .ttl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px}
@@ -257,7 +263,7 @@ d3.json(US).then(us=>{
   const node=gNode.selectAll('g.node').data(DATA.filter(d=>d._x!=null)).join('g')
     .attr('class','node').attr('transform',d=>`translate(${d._x},${d._y})`)
     .on('pointerdown',(e,d)=>{ if(e.pointerType!=='mouse') e.stopPropagation(); })
-    .on('pointerenter',function(e,d){ if(e.pointerType==='mouse') d3.select(this).raise().select('.dot').attr('r',7.5/k); })
+    .on('pointerenter',function(e,d){ if(e.pointerType==='mouse') d3.select(this).raise().select('.dot').attr('r',dotR(d)*1.5); })
     .on('pointermove',(e,d)=>{ if(e.pointerType==='mouse') showTip(e,tipHTML(d)); })
     .on('pointerleave',function(e,d){ d3.select(this).select('.dot').attr('r',dotR(d)); hideTip(); })
     .on('pointerup',(e,d)=>{
@@ -330,8 +336,8 @@ function showPopup(x,y,d){
     ${d.note?`<div class="note warn">${esc(d.note)}</div>`:''}
     <div class="actions">
       ${d.libby?`<button class="collect">${done?'✓ Collected — undo':'Mark as collected'}</button>`:''}
-      ${libraryUrl(d)?`<a href="${esc(libraryUrl(d))}" target="_blank" rel="noopener">Library card / website &#8599;</a>`:''}
-      <a href="${gmapUrl(d)}" target="_blank" rel="noopener">Open in Google Maps &#8599;</a>
+      ${libraryUrl(d)?`<a class="linkbtn" href="${esc(libraryUrl(d))}" target="_blank" rel="noopener">Library card / website <span class="ext">&#8599;</span></a>`:''}
+      <a class="linkbtn" href="${gmapUrl(d)}" target="_blank" rel="noopener">Open in Google Maps <span class="ext">&#8599;</span></a>
     </div>`;
   popup.classList.add('show');
   const pad=12, rect=popup.getBoundingClientRect();
