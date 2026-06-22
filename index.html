@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library Quest</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#121620;--line:#232a38;--txt:#e8ebf0;--muted:#94a0b3;--gold:#f2c14e;--accent:#5aa2ff}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#0b0e14;color:var(--txt)}
+  body::before{content:"";position:fixed;inset:0;background:radial-gradient(900px 520px at 72% 16%,#172238 0%,transparent 62%),linear-gradient(180deg,#101521 0%,#0b0e14 42%);z-index:-1}
+  main{max-width:1040px;margin:0 auto;padding:48px 22px 56px}
+  h1{font-size:clamp(40px,6vw,72px);line-height:.94;margin:0 0 16px;letter-spacing:0}
+  .lead{max-width:700px;color:var(--muted);font-size:18px;line-height:1.5;margin:0 0 38px}
+  h2{margin:0 0 14px;font-size:18px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .state{display:grid;grid-template-columns:92px 1fr;gap:16px;border:1px solid var(--line);border-radius:8px;background:rgba(18,22,32,.94);padding:16px;text-decoration:none;color:var(--txt)}
+  a.state:hover{border-color:var(--accent);background:#151c2b}
+  .tile{display:flex;align-items:center;justify-content:center;min-height:104px;border:1px solid #334056;border-radius:7px;background:linear-gradient(160deg,#172238,#0e121b)}
+  .abbr{font-size:34px;font-weight:900;letter-spacing:0;color:var(--gold)}
+  .pending .abbr{color:#788398}
+  .head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+  .name{margin:0;font-size:22px;font-weight:800;line-height:1.1}
+  .meta{color:var(--muted);font-size:13px;line-height:1.45}
+  .pending{opacity:.68}
+  .status{flex:none;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;border:1px solid var(--line);border-radius:999px;padding:2px 7px}
+  @media (max-width:560px){
+    main{padding:34px 14px 44px}
+    .lead{font-size:16px}
+    .grid{grid-template-columns:1fr}
+    .state{grid-template-columns:74px 1fr;gap:12px;padding:12px}
+    .tile{min-height:78px}
+    .abbr{font-size:28px}
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Library Quest</h1>
+  <p class="lead">Libby lets you borrow ebooks and audiobooks from your library. Many libraries have different digital collections, so adding more eligible library cards can unlock more books, shorter waits, and more ways to read.</p>
+
+  <h2>States</h2>
+  <section class="grid" aria-label="States">
+    <a class="state" href="california.html">
+      <div class="tile" aria-hidden="true"><div class="abbr">CA</div></div>
+      <div>
+        <div class="head"><div class="name">California</div></div>
+        <div class="meta">California residents can get library cards at any public library system in the state, unlocking more Libby ebooks and audiobooks.</div>
+      </div>
+    </a>
+    <div class="state pending">
+      <div class="tile" aria-hidden="true"><div class="abbr">WA</div></div>
+      <div>
+        <div class="head"><div class="name">Washington</div><span class="status">Pending</span></div>
+        <div class="meta">Pending dataset.</div>
+      </div>
+    </div>
+    <div class="state pending">
+      <div class="tile" aria-hidden="true"><div class="abbr">NY</div></div>
+      <div>
+        <div class="head"><div class="name">New York</div><span class="status">Pending</span></div>
+        <div class="meta">Pending dataset.</div>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
