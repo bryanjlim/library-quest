@@ -1782,7 +1782,7 @@
   "system": "Southern California (MCLS)",
   "region": "Greater Los Angeles",
   "shared": "",
-  "note": "",
+  "note": "Does not use Libby; left OverDrive in 2020 and now uses cloudLibrary and Hoopla.",
   "lat": 34.1425,
   "lon": -118.2551,
   "libby": false

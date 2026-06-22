@@ -71,6 +71,7 @@ HTML = r"""<!DOCTYPE html>
   svg.stage:active{cursor:grabbing}
   .county{cursor:default}
   .rail{fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .city-label{fill:#94a0b3;font-size:11px;font-weight:600;pointer-events:none;paint-order:stroke;stroke:#0b0e14;stroke-width:3px;stroke-linejoin:round;text-anchor:middle;letter-spacing:.02em}
   .node{cursor:pointer}
   .node .dot{transition:fill .15s}
   .chk{fill:#1a1a1a;font-weight:900;text-anchor:middle;dominant-baseline:central;paint-order:stroke;stroke:#fff;stroke-width:.6px}
@@ -107,7 +108,13 @@ HTML = r"""<!DOCTYPE html>
   .modal p.muted{color:var(--muted);font-size:12.5px}
   .modal-x{position:absolute;top:10px;right:14px;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer}
   .modal-ok{background:var(--gold);color:#1a1a1a;border:none;font-weight:600;font-size:13px;padding:8px 16px;border-radius:8px;cursor:pointer}
+  .modal-cancel{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:600;font-size:13px;padding:7px 15px;border-radius:8px;cursor:pointer}
+  .modal-cancel:hover{color:var(--txt);border-color:var(--accent)}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
   .badge{position:absolute;left:12px;bottom:12px;font-size:10px;color:var(--muted);background:rgba(13,17,26,.8);border:1px solid var(--line);border-radius:6px;padding:3px 7px}
+  .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;pointer-events:none;z-index:1}
+  .loading .spinner{width:22px;height:22px;border:2.5px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin-right:10px;flex:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
   @media (max-width:700px){
     html,body{height:100%;overflow:hidden}
     #app{height:100dvh;display:block;position:relative}
@@ -153,10 +160,12 @@ HTML = r"""<!DOCTYPE html>
       <select id="region"><option value="">All catalogs</option></select>
       <div class="btns"><button id="resetview">Reset view</button><button id="clearmine">Reset progress</button></div>
       <label class="row"><input type="checkbox" id="railtoggle" checked> Show rail lines</label>
+      <label class="row"><input type="checkbox" id="uncoltoggle"> Show uncollected only</label>
     </div>
     <div id="list"></div>
   </div>
   <div id="map">
+    <div id="loading" class="loading"><div class="spinner"></div>Loading California map…</div>
     <div class="zbtns"><button id="zin">+</button><button id="zout">&minus;</button></div>
     <div class="legend" id="legend"></div>
     <div class="badge">Pan &amp; scroll to zoom &middot; click a dot for details</div>
@@ -176,8 +185,29 @@ HTML = r"""<!DOCTYPE html>
     <button class="modal-ok" id="aboutok">Got it</button>
   </div>
 </div>
+<div id="confirmclear" class="modal-overlay">
+  <div class="modal" style="max-width:440px">
+    <button class="modal-x" id="confirmclearclose">&times;</button>
+    <h2>Clear all collected cards?</h2>
+    <p>This resets your progress to zero. This can't be undone.</p>
+    <div class="modal-actions">
+      <button class="modal-cancel" id="confirmclearno">Cancel</button>
+      <button class="modal-ok" id="confirmclearyes">Clear progress</button>
+    </div>
+  </div>
+</div>
 <script>
 const DATA=__DATA__, RAIL=__RAIL__;
+const CITIES=[
+  {n:"Eureka",lat:40.8021,lon:-124.1637},{n:"Redding",lat:40.5865,lon:-122.3917},
+  {n:"Sacramento",lat:38.5816,lon:-121.4944},{n:"Stockton",lat:37.9577,lon:-121.2908},
+  {n:"San Francisco",lat:37.7790,lon:-122.4156},{n:"Oakland",lat:37.8044,lon:-122.2712},
+  {n:"San Jose",lat:37.3382,lon:-121.8863},{n:"Fresno",lat:36.7378,lon:-119.7871},
+  {n:"Bakersfield",lat:35.3733,lon:-119.0187},{n:"Santa Barbara",lat:34.4208,lon:-119.6982},
+  {n:"Los Angeles",lat:34.0537,lon:-118.2428},{n:"Long Beach",lat:33.7701,lon:-118.1937},
+  {n:"Anaheim",lat:33.8366,lon:-117.9143},{n:"San Bernardino",lat:34.1083,lon:-117.2898},
+  {n:"Riverside",lat:33.9533,lon:-117.3962},{n:"San Diego",lat:32.7157,lon:-117.1611}
+];
 const TOTAL=DATA.filter(d=>d.libby).length;
 const KEY="library_quest_ca_v1";
 const US="https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json";
@@ -203,7 +233,7 @@ const svg=d3.select('#map').append('svg').attr('class','stage')
 const defs=svg.append('defs');
 
 const g=svg.append('g');
-const gCounty=g.append('g'), gState=g.append('g'), gRail=g.append('g'), gNode=g.append('g');
+const gCounty=g.append('g'), gState=g.append('g'), gRail=g.append('g'), gLabel=g.append('g'), gNode=g.append('g');
 const tip=document.getElementById('tip');
 const popup=document.getElementById('popup');
 
@@ -235,6 +265,11 @@ d3.json(US).then(us=>{
     .attr('stroke-dasharray',d=>d.dash?'4,3':null).attr('opacity',.85)
     .on('mousemove',(e,d)=>showTip(e,`<b>${d.name}</b>`)).on('mouseout',hideTip);
 
+  // city labels for geographic context (fade out as you zoom in)
+  const cityPts=CITIES.map(c=>{const p=projection([c.lon,c.lat]); return {n:c.n,x:p?p[0]:null,y:p?p[1]:null};}).filter(c=>c.x!=null);
+  gLabel.selectAll('text').data(cityPts).join('text').attr('class','city-label')
+    .attr('x',d=>d.x).attr('y',d=>d.y).attr('dy','-7').text(d=>d.n);
+
   // nodes
   DATA.forEach(d=>{const p=projection([d.lon,d.lat]); d._x=p?p[0]:null; d._y=p?p[1]:null;});
   const node=gNode.selectAll('g.node').data(DATA.filter(d=>d._x!=null)).join('g')
@@ -260,7 +295,8 @@ d3.json(US).then(us=>{
   initT=d3.zoomIdentity;
   svg.call(zoom);
   svg.on('click',()=>{ if(Date.now()-lastTouchPopup>=500) hidePopup(); });
-}).catch(err=>{ mapDiv.insertAdjacentHTML('beforeend','<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a0b3;padding:30px;text-align:center">Could not load the base map (needs internet for the California geometry).</div>'); console.error(err); });
+  const ld=document.getElementById('loading'); if(ld) ld.remove();
+}).catch(err=>{ const ld=document.getElementById('loading'); if(ld) ld.remove(); mapDiv.insertAdjacentHTML('beforeend','<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a0b3;padding:30px;text-align:center">Could not load the base map (needs internet for the California geometry).</div>'); console.error(err); });
 
 let initT=d3.zoomIdentity;
 function dotR(d){
@@ -289,6 +325,8 @@ function rescale(){
   gRail.selectAll('path').attr('stroke-width',1.5/k);
   gCounty.selectAll('path').attr('stroke-width',0.4/k);
   gState.select('path').attr('stroke-width',1.1/k);
+  gLabel.selectAll('text').style('font-size',(11/k)+'px').attr('stroke-width',(3/k)+'px')
+    .attr('opacity',Math.max(0,1-(k-1)/2));
 }
 
 function tipHTML(d){
@@ -297,7 +335,7 @@ function tipHTML(d){
 }
 function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 function noteHTML(d){
-  if(!d.libby) return '<div class="note warn">Does not use Libby; left OverDrive in 2020 and now uses cloudLibrary and Hoopla.</div>';
+  if(!d.libby) return '';
   if(d.shared) return `<div class="note">Part of the <b>${esc(catalogName(d.shared))}</b> Libby group. One card gives you the same catalog and waitlists as the rest of this group.</div>`;
   return '<div class="note">Independent Libby collection with its own titles and waitlists.</div>';
 }
@@ -346,7 +384,9 @@ cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textConten
 function passes(d){
   const q=document.getElementById('search').value.toLowerCase().trim();
   const rf=document.getElementById('region').value;
+  const uf=document.getElementById('uncoltoggle').checked;
   if(rf && catKey(d)!==rf) return false;
+  if(uf && d.libby && collected.has(d.name)) return false;
   if(q && !(d.name.toLowerCase().includes(q)||d.city.toLowerCase().includes(q)||d.county.toLowerCase().includes(q))) return false;
   return true;
 }
@@ -360,7 +400,9 @@ function refresh(){
   renderList();
 }
 function renderList(){
-  const list=document.getElementById('list'); list.innerHTML=''; let cur=null;
+  const list=document.getElementById('list');
+  const prevTop=list.scrollTop, prevH=list.scrollHeight;
+  list.innerHTML=''; let cur=null;
   const rows=DATA.filter(passes).slice().sort((a,b)=>(CAT_ORDER.indexOf(catKey(a))-CAT_ORDER.indexOf(catKey(b)))||a.name.localeCompare(b.name));
   rows.forEach(d=>{
     const ckey=catKey(d);
@@ -382,25 +424,44 @@ function renderList(){
     it.addEventListener('click',()=>flyTo(d));
     list.appendChild(it);
   });
+  // Keep scroll stable when the list hasn't shrunk (e.g. toggling a checkbox);
+  // if a search shrank the list below the previous scroll position, the browser
+  // clamps scrollTop to the new max, which lands us at the bottom — so only
+  // restore when the new content is at least as tall as before.
+  if(list.scrollHeight>=prevH) list.scrollTop=prevTop;
+  else list.scrollTop=0;
 }
 function flyTo(d){
   if(d._x==null) return;
   const t=d3.zoomIdentity.translate(975/2,610/2).scale(8).translate(-d._x,-d._y);
   svg.transition().duration(800).call(zoom.transform,t);
+  if(isMobile()) setSideOpen(false);
 }
 
 document.getElementById('search').addEventListener('input',refresh);
 document.getElementById('region').addEventListener('change',refresh);
+document.getElementById('uncoltoggle').addEventListener('change',refresh);
 document.getElementById('resetview').onclick=()=>svg.transition().duration(700).call(zoom.transform,initT);
-document.getElementById('clearmine').onclick=()=>{ if(confirm('Clear all collected cards?')){collected=new Set();saveSet();paint();refresh();} };
+const confirmClear=document.getElementById('confirmclear');
+function closeConfirmClear(){ confirmClear.classList.remove('show'); }
+document.getElementById('clearmine').onclick=()=>confirmClear.classList.add('show');
+document.getElementById('confirmclearclose').onclick=closeConfirmClear;
+document.getElementById('confirmclearno').onclick=closeConfirmClear;
+document.getElementById('confirmclearyes').onclick=()=>{ collected=new Set(); saveSet(); paint(); refresh(); closeConfirmClear(); };
+confirmClear.addEventListener('click',e=>{ if(e.target===confirmClear) closeConfirmClear(); });
 document.getElementById('railtoggle').onchange=function(){ gRail.attr('display',this.checked?null:'none'); };
 document.getElementById('zin').onclick=()=>svg.transition().duration(250).call(zoom.scaleBy,1.6);
 document.getElementById('zout').onclick=()=>svg.transition().duration(250).call(zoom.scaleBy,1/1.6);
 document.getElementById('menubtn').onclick=()=>{
-  const side=document.getElementById('side'), open=side.classList.toggle('open');
-  document.getElementById('menubtn').innerHTML=open?'&times;':'&#9776;';
-  document.getElementById('menubtn').setAttribute('aria-expanded',open);
+  setSideOpen(!document.getElementById('side').classList.contains('open'));
 };
+function setSideOpen(open){
+  const side=document.getElementById('side');
+  side.classList.toggle('open',open);
+  const btn=document.getElementById('menubtn');
+  btn.innerHTML=open?'&times;':'&#9776;';
+  btn.setAttribute('aria-expanded',String(open));
+}
 
 // legend
 (function(){
@@ -419,7 +480,7 @@ document.getElementById('infobtn').onclick=()=>aboutEl.classList.add('show');
 document.getElementById('aboutclose').onclick=()=>aboutEl.classList.remove('show');
 document.getElementById('aboutok').onclick=()=>aboutEl.classList.remove('show');
 aboutEl.addEventListener('click',e=>{if(e.target===aboutEl)aboutEl.classList.remove('show');});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')aboutEl.classList.remove('show');});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){aboutEl.classList.remove('show');closeConfirmClear();}});
 try{ if(!localStorage.getItem('library_quest_ca_about_seen')){ aboutEl.classList.add('show'); localStorage.setItem('library_quest_ca_about_seen','1'); } }catch(e){}
 
 refresh();

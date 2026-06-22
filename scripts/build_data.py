@@ -218,14 +218,17 @@ D = [
  ("Tuolumne County Library","Sonora","Tuolumne","49-99 Cooperative","Gold Country","","",37.9841,-120.3822),
 ]
 
-# Systems that do NOT use Libby/OverDrive (use cloudLibrary/Hoopla/etc. instead)
-NO_LIBBY = {"Glendale Public Library"}
+# Systems that do NOT use Libby/OverDrive (use cloudLibrary/Hoopla/etc. instead).
+# The value is the explanatory note shown in the popup for that system.
+NO_LIBBY = {
+    "Glendale Public Library": "Does not use Libby; left OverDrive in 2020 and now uses cloudLibrary and Hoopla.",
+}
 
 records = []
 for (name, city, county, system, region, shared, note, lat, lon) in D:
     records.append({
         "name": name, "city": city, "county": county, "system": system,
-        "region": region, "shared": shared, "note": note,
+        "region": region, "shared": shared, "note": note or NO_LIBBY.get(name, ""),
         "lat": lat, "lon": lon,
         "libby": name not in NO_LIBBY,
     })
