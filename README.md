@@ -1,12 +1,15 @@
 # Library Quest 📚
 
-An interactive library-card quest site. California is the first supported state, with more states intended later.
+An interactive library-card quest site tracking which library systems you can get cards at, and which Libby catalogs each card unlocks.
 
-California residents can get a library card at any public library system in the state (in person with a CA ID; many also online). Each card unlocks that system's digital collection in the Libby app, so the more cards you collect, the more you can borrow.
+## Supported States
+
+- **California** — ~182 systems across 57 counties. Any CA resident can get a card at any system.
+- **New York** — 23 public library systems, each with its own Libby catalog. Any NYS resident can get free digital cards at NYPL, Brooklyn, and Queens.
 
 ## Pages
 
-[`index.html`](index.html) is the home page. [`california.html`](california.html) is the first state map.
+[`index.html`](index.html) is the home page. [`california.html`](california.html) and [`newyork.html`](newyork.html) are the state maps.
 
 ## Features
 
@@ -19,12 +22,16 @@ California residents can get a library card at any public library system in the 
 ## Project layout
 
 ```
-data/ca_libraries.json     # the dataset (182 systems: name, county, system, region, shared catalog, coords, libby flag)
-data/ca_library_urls.json  # official library card / website links for every system
-scripts/build_data.py      # generates data/ca_libraries.json
-scripts/build_california.py # builds california.html from the data
-index.html                 # home page
-california.html            # built California app
+data/ca_libraries.json      # CA dataset (182 systems)
+data/ca_library_urls.json   # official library card / website links
+data/ny_libraries.json      # NY dataset (23 systems)
+scripts/build_data.py       # generates data/ca_libraries.json
+scripts/build_california.py # builds california.html
+scripts/build_ny_data.py    # generates data/ny_libraries.json
+scripts/build_newyork.py    # builds newyork.html
+index.html                  # home page
+california.html             # California map
+newyork.html                # New York map
 ```
 
 ## Rebuilding
@@ -32,8 +39,13 @@ california.html            # built California app
 Run from the repo root:
 
 ```bash
+# California
 python3 scripts/build_data.py
 python3 scripts/build_california.py
+
+# New York
+python3 scripts/build_ny_data.py
+python3 scripts/build_newyork.py
 ```
 
 ## Data notes & caveats
