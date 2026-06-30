@@ -1,12 +1,15 @@
 # Library Quest 📚
 
-An interactive library-card quest site. California is the first supported state, with more states intended later.
+An interactive library-card quest site tracking which library systems you can get cards at, and which Libby catalogs each card unlocks.
 
-California residents can get a library card at any public library system in the state (in person with a CA ID; many also online). Each card unlocks that system's digital collection in the Libby app, so the more cards you collect, the more you can borrow.
+## Supported States
+
+- **California** — ~182 systems across 57 counties. Any CA resident can get a card at any system.
+- **Washington** — 57 systems with reciprocal borrowing agreements. 51 share the WDLC Libby catalog; 6 have independent collections.
 
 ## Pages
 
-[`index.html`](index.html) is the home page. [`california.html`](california.html) is the first state map.
+[`index.html`](index.html) is the home page. [`california.html`](california.html) and [`washington.html`](washington.html) are the state maps.
 
 ## Features
 
@@ -19,12 +22,16 @@ California residents can get a library card at any public library system in the 
 ## Project layout
 
 ```
-data/ca_libraries.json     # the dataset (182 systems: name, county, system, region, shared catalog, coords, libby flag)
-data/ca_library_urls.json  # official library card / website links for every system
-scripts/build_data.py      # generates data/ca_libraries.json
-scripts/build_california.py # builds california.html from the data
-index.html                 # home page
-california.html            # built California app
+data/ca_libraries.json      # CA dataset (182 systems)
+data/ca_library_urls.json   # official library card / website links
+data/wa_libraries.json      # WA dataset (57 systems)
+scripts/build_data.py       # generates data/ca_libraries.json
+scripts/build_california.py # builds california.html
+scripts/build_wa_data.py    # generates data/wa_libraries.json
+scripts/build_washington.py  # builds washington.html
+index.html                  # home page
+california.html             # California map
+washington.html              # Washington map
 ```
 
 ## Rebuilding
@@ -32,8 +39,13 @@ california.html            # built California app
 Run from the repo root:
 
 ```bash
+# California
 python3 scripts/build_data.py
 python3 scripts/build_california.py
+
+# Washington
+python3 scripts/build_wa_data.py
+python3 scripts/build_washington.py
 ```
 
 ## Data notes & caveats
