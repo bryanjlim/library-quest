@@ -1,0 +1,488 @@
+#!/usr/bin/env python3
+import json
+import os
+
+records = json.load(open("data/wa_libraries.json"))
+library_urls = json.load(open("data/wa_library_urls.json")) if os.path.exists("data/wa_library_urls.json") else {}
+for r in records:
+    r["url"] = library_urls.get(r["name"], "")
+records.sort(key=lambda r: (r["region"], r["name"]))
+data_json = json.dumps(records, separators=(",",":"))
+
+RAIL = [
+  {"name":"Amtrak Cascades","op":"Amtrak","color":"#08306b","dash":True,
+   "coords":[[49.0023,-122.7563],[48.7519,-122.4787],[48.4201,-122.3341],[48.0518,-122.1771],[47.9790,-122.2020],[47.6062,-122.3321],[47.2529,-122.4443],[46.9960,-122.9049],[46.7324,-122.9927],[45.6387,-122.6615]]},
+  {"name":"Amtrak Empire Builder","op":"Amtrak","color":"#08306b","dash":True,
+   "coords":[[47.6062,-122.3321],[47.8610,-122.2070],[47.9790,-122.2020],[48.0518,-122.1771],[47.4235,-120.3103],[47.6588,-117.4260]]},
+  {"name":"Sounder Commuter Rail","op":"Sound Transit","color":"#e31937","dash":False,
+   "coords":[[48.0518,-122.1771],[47.9790,-122.2020],[47.6062,-122.3321],[47.4439,-122.2958],[47.2529,-122.4443],[47.1624,-122.5024]]}
+]
+rail_json = json.dumps(RAIL, separators=(",",":"))
+total_libby = sum(1 for r in records if r["libby"])
+
+HTML = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Washington Library Quest</title>
+<meta name="description" content="An interactive map of Washington state public library systems and their reciprocal borrowing agreements. Track the Libby library cards you've collected.">
+<link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;text y='.9em' font-size='90'&gt;📚&lt;/text&gt;&lt;/svg&gt;">
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<style>
+  :root{--bg:#0b0e14;--panel:#121620;--line:#232a38;--txt:#e8ebf0;--muted:#94a0b3;--gold:#f2c14e;--accent:#5aa2ff;}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--txt);overflow:hidden}
+  #app{display:flex;height:100vh}
+  #side{width:360px;min-width:300px;background:linear-gradient(180deg,#141926,#0f131c);border-right:1px solid var(--line);display:flex;flex-direction:column;z-index:5}
+  header{padding:16px 16px 12px;border-bottom:1px solid var(--line);position:relative}
+  h1{font-size:16px;margin:0 0 2px;letter-spacing:.2px}
+  .sub{font-size:11.5px;color:var(--muted)}
+  .homebtn{display:inline-flex;margin:0 0 10px;color:var(--muted);font-size:12px;font-weight:700;text-decoration:none}
+  .homebtn:hover{color:var(--txt)}
+  .infobtn{position:absolute;top:14px;right:14px;display:flex;align-items:center;gap:5px;background:#0b0e14;border:1px solid var(--line);color:var(--muted);font-size:11px;padding:4px 9px;border-radius:7px;cursor:pointer}
+  .infobtn:hover{color:var(--txt);border-color:var(--accent)}
+  .menubtn{display:none;position:absolute;top:14px;right:14px;align-items:center;justify-content:center;width:30px;height:27px;background:#0b0e14;border:1px solid var(--line);color:var(--muted);font-size:18px;padding:0;border-radius:7px;cursor:pointer;line-height:1}
+  .menubtn:hover{color:var(--txt);border-color:var(--accent)}
+  .prog{display:flex;align-items:center;gap:12px;margin-top:12px}
+  .ring-wrap{position:relative;width:54px;height:54px;flex:none}
+  .ring-wrap svg{transform:rotate(-90deg)}
+  .ring-wrap .pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--gold)}
+  .prog .lbl{font-size:12px;color:var(--muted)}
+  .prog .lbl b{color:var(--txt);font-size:15px;display:block}
+  .controls{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+  input[type=text],select{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:#0b0e14;color:var(--txt);font-size:13px}
+  .row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+  .btns{display:flex;gap:8px}
+  .btns button{flex:1;padding:7px;border-radius:8px;border:1px solid var(--line);background:#0b0e14;color:var(--muted);font-size:12px;cursor:pointer}
+  .btns button:hover{color:var(--txt);border-color:var(--accent)}
+  #list{overflow-y:auto;flex:1;padding:6px 8px}
+  .grp{margin:8px 4px 2px;padding:4px 5px;border-radius:7px;font-size:11.5px;line-height:1.25;color:var(--muted);display:flex;align-items:flex-start;gap:6px;cursor:pointer;user-select:none}
+  .grp:hover{background:#1b2333;color:var(--txt)}
+  .grp .chev{width:10px;text-align:center;color:var(--txt)}
+  .grp .cnt{margin-left:auto;color:var(--muted)}
+  .gdot{width:10px;height:10px;border-radius:50%;flex:none}
+  .item{display:flex;align-items:flex-start;gap:9px;padding:6px 8px;border-radius:8px;cursor:pointer}
+  .item:hover{background:#1b2333}
+  .item input{margin-top:3px;flex:none;width:15px;height:15px;accent-color:var(--gold)}
+  .item .nm{font-size:12.5px;line-height:1.25}
+  .item .loc{font-size:11px;color:var(--muted)}
+  .item .meta{flex:1;min-width:0}
+  .item .gm{margin-left:auto;color:var(--accent);text-decoration:none;font-size:15px;padding:0 2px;flex:none}
+  .item .gm:hover{color:#9cc4ff}
+  .item.done .nm{color:var(--gold)}
+  #map{flex:1;position:relative;background:radial-gradient(1200px 800px at 60% 30%, #131a28 0%, #0b0e14 70%)}
+  svg.stage{width:100%;height:100%;display:block;cursor:grab}
+  svg.stage:active{cursor:grabbing}
+  .county{cursor:default}
+  .rail{fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .city-label{fill:#94a0b3;font-size:11px;font-weight:600;pointer-events:none;paint-order:stroke;stroke:#0b0e14;stroke-width:3px;stroke-linejoin:round;text-anchor:middle;letter-spacing:.02em}
+  .node{cursor:pointer}
+  .node .dot{transition:fill .15s}
+  .chk{fill:#1a1a1a;font-weight:900;text-anchor:middle;dominant-baseline:central;paint-order:stroke;stroke:#fff;stroke-width:.6px}
+  .tooltip{position:fixed;pointer-events:none;background:rgba(10,13,20,.95);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--txt);max-width:240px;z-index:50;opacity:0;transition:opacity .12s;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+  .tooltip b{display:block;font-size:12.5px;margin-bottom:2px}
+  .tooltip .meta{color:var(--muted);font-size:11px}
+  .popup{position:fixed;display:none;width:min(280px,calc(100vw - 24px));background:rgba(13,17,26,.97);border:1px solid var(--line);border-radius:10px;padding:11px 12px;z-index:70;box-shadow:0 10px 30px rgba(0,0,0,.55);font-size:12px}
+  .popup.show{display:block}
+  .popup .x{position:absolute;top:6px;right:8px;background:none;border:none;color:var(--muted);font-size:18px;line-height:1;cursor:pointer}
+  .popup .h{font-weight:700;font-size:13.5px;padding-right:18px;margin-bottom:3px}
+  .popup .m{color:var(--muted);font-size:11px;line-height:1.35}
+  .popup .note{margin-top:8px;padding:7px 8px;border-radius:8px;background:#1b2333;color:#dfe6f2;line-height:1.35}
+  .popup .warn{background:#2b1d16;color:#ffd5bd}
+  .popup .actions{display:flex;flex-direction:column;gap:7px;margin-top:11px}
+  .popup .collect{width:100%;background:var(--gold);border:none;color:#1a1a1a;border-radius:8px;padding:0 12px;min-height:44px;font-size:13px;font-weight:700;cursor:pointer}
+  .popup .collect:active{filter:brightness(.94)}
+  .popup .linkbtn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:44px;background:#0b0e14;border:1px solid var(--line);border-radius:8px;padding:0 12px;color:var(--accent);font-weight:700;font-size:13px;text-decoration:none}
+  .popup .linkbtn:hover{border-color:var(--accent);background:#151c2b}
+  .popup .linkbtn:active{background:#1b2333}
+  .popup .linkbtn .ext{color:var(--muted);font-size:14px;flex:none}
+  .legend{position:absolute;right:12px;bottom:12px;background:rgba(13,17,26,.92);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:11px;max-width:300px;box-shadow:0 6px 20px rgba(0,0,0,.45)}
+  .legend .ttl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px}
+  .legend .li{display:flex;align-items:flex-start;gap:8px;margin:3px 0}
+  .legend details{margin-top:6px}
+  .legend summary{cursor:pointer;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+  .swatch{width:11px;height:11px;border-radius:3px;flex:none;display:inline-block}
+  .rsw{display:inline-block;width:18px;height:0;border-top:3px solid #000;flex:none}
+  .zbtns{position:absolute;left:12px;top:12px;display:flex;flex-direction:column;gap:6px}
+  .zbtns button{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:rgba(13,17,26,.92);color:var(--txt);font-size:18px;cursor:pointer;line-height:1}
+  .zbtns button:hover{border-color:var(--accent)}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
+  .modal-overlay.show{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:540px;width:100%;max-height:88vh;overflow-y:auto;padding:22px 24px;position:relative;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+  .modal h2{margin:0 0 12px;font-size:19px}
+  .modal p{font-size:13.5px;line-height:1.55;color:#dde2ea;margin:0 0 12px}
+  .modal p.muted{color:var(--muted);font-size:12.5px}
+  .modal-x{position:absolute;top:10px;right:14px;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer}
+  .modal-ok{background:var(--gold);color:#1a1a1a;border:none;font-weight:600;font-size:13px;padding:8px 16px;border-radius:8px;cursor:pointer}
+  .modal-cancel{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:600;font-size:13px;padding:7px 15px;border-radius:8px;cursor:pointer}
+  .modal-cancel:hover{color:var(--txt);border-color:var(--accent)}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+  .badge{position:absolute;left:12px;bottom:12px;font-size:10px;color:var(--muted);background:rgba(13,17,26,.8);border:1px solid var(--line);border-radius:6px;padding:3px 7px}
+  .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;pointer-events:none;z-index:1}
+  .loading .spinner{width:22px;height:22px;border:2.5px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin-right:10px;flex:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (max-width:700px){
+    html,body{height:100%;overflow:hidden}
+    #app{height:100dvh;display:block;position:relative}
+    #map{position:absolute;inset:0;width:100%;height:100dvh;min-height:0}
+    #side{position:absolute;top:10px;left:10px;right:10px;width:auto;min-width:0;height:auto;max-height:calc(100dvh - 20px);border:1px solid var(--line);border-radius:10px;background:rgba(18,22,32,.94);backdrop-filter:blur(10px);overflow:hidden}
+    header{padding:12px}
+    h1{font-size:15px;padding-right:128px}
+    .sub,.prog{display:none}
+    .homebtn{margin-bottom:8px}
+    .infobtn{top:10px;right:78px}
+    .menubtn{display:flex;top:10px;right:10px}
+    .controls{padding:10px 12px}
+    #side:not(.open) header{border-bottom:0}
+    #side:not(.open) .controls,#side:not(.open) #list{display:none}
+    #side.open #list{flex:none;display:block;max-height:42dvh;min-height:130px}
+    .zbtns{top:96px}
+    .legend{left:10px;right:10px;bottom:10px;max-width:none;max-height:28dvh;overflow:auto}
+    .badge{display:none}
+    .modal-overlay{padding:10px}
+    .modal{max-height:92dvh;padding:18px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <header>
+      <a class="homebtn" href="index.html">&larr; Library Quest</a>
+      <h1>Washington Library Quest &#128218;</h1>
+      <div class="sub">Collect library cards for more Libby catalogs</div>
+      <button class="infobtn" id="infobtn" aria-label="Info"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>Info</button>
+      <button class="menubtn" id="menubtn" aria-label="Menu" aria-expanded="false">&#9776;</button>
+      <div class="prog">
+        <div class="ring-wrap">
+          <svg width="54" height="54"><circle cx="27" cy="27" r="22" fill="none" stroke="#222b3a" stroke-width="6"/><circle id="ringfg" cx="27" cy="27" r="22" fill="none" stroke="url(#gg)" stroke-width="6" stroke-linecap="round" stroke-dasharray="138.2" stroke-dashoffset="138.2"/><defs><linearGradient id="gg"><stop offset="0" stop-color="#f2c14e"/><stop offset="1" stop-color="#ffd97a"/></linearGradient></defs></svg>
+          <div class="pct" id="pct">0%</div>
+        </div>
+        <div class="lbl"><b id="pcount">0</b>of __TOTAL__ systems collected</div>
+      </div>
+    </header>
+    <div class="controls">
+      <input type="text" id="search" placeholder="Search by name, city, or county...">
+      <select id="region"><option value="">All catalogs</option></select>
+      <div class="btns"><button id="resetview">Reset view</button><button id="clearmine">Reset progress</button></div>
+      <label class="row"><input type="checkbox" id="railtoggle" checked> Show rail lines</label>
+      <label class="row"><input type="checkbox" id="uncoltoggle"> Show uncollected only</label>
+    </div>
+    <div id="list"></div>
+  </div>
+  <div id="map">
+    <div id="loading" class="loading"><div class="spinner"></div>Loading Washington map&hellip;</div>
+    <div class="zbtns"><button id="zin">+</button><button id="zout">&minus;</button></div>
+    <div class="legend" id="legend"></div>
+    <div class="badge">Pan &amp; scroll to zoom &middot; click a dot for details</div>
+  </div>
+</div>
+<div class="tooltip" id="tip"></div>
+<div class="popup" id="popup"></div>
+<div id="about" class="modal-overlay">
+  <div class="modal">
+    <button class="modal-x" id="aboutclose">&times;</button>
+    <h2>Washington Library Quest &#128218;</h2>
+    <p>Unlike California, Washington does <b>not</b> have a statewide open-borrowing law. Instead, library systems form <b>reciprocal borrowing agreements</b> that let cardholders use partner libraries.</p>
+    <p>Most smaller systems share one Libby catalog through the <b>Washington Digital Library Consortium (WDLC)</b>, branded "Washington Anytime Library." The state's largest systems &mdash; like KCLS, Seattle Public Library, Pierce County, Spokane &mdash; maintain their own independent Libby collections.</p>
+    <p><b>Dot color:</b> Green = WDLC shared catalog (one card gives the same digital collection). Grey = independent Libby catalog (each card unlocks a unique collection).</p>
+    <p class="muted">Each pin is a library <b>system</b> (one card per system). Click a dot for details including reciprocal agreements. Progress saves in your browser.</p>
+    <button class="modal-ok" id="aboutok">Got it</button>
+  </div>
+</div>
+<div id="confirmclear" class="modal-overlay">
+  <div class="modal" style="max-width:440px">
+    <button class="modal-x" id="confirmclearclose">&times;</button>
+    <h2>Clear all collected cards?</h2>
+    <p>This resets your progress to zero. This can't be undone.</p>
+    <div class="modal-actions">
+      <button class="modal-cancel" id="confirmclearno">Cancel</button>
+      <button class="modal-ok" id="confirmclearyes">Clear progress</button>
+    </div>
+  </div>
+</div>
+<script>
+const DATA=__DATA__, RAIL=__RAIL__;
+const CITIES=[
+  {n:"Seattle",lat:47.6062,lon:-122.3321},{n:"Spokane",lat:47.6588,lon:-117.4260},
+  {n:"Tacoma",lat:47.2529,lon:-122.4443},{n:"Vancouver",lat:45.6387,lon:-122.6615},
+  {n:"Olympia",lat:46.9960,lon:-122.9049},{n:"Bellingham",lat:48.7519,lon:-122.4787},
+  {n:"Yakima",lat:46.6021,lon:-120.5059},{n:"Kennewick",lat:46.2112,lon:-119.1372},
+  {n:"Wenatchee",lat:47.4235,lon:-120.3103},{n:"Walla Walla",lat:46.0646,lon:-118.3430}
+];
+const TOTAL=DATA.filter(d=>d.libby).length;
+const KEY="library_quest_wa_v1";
+const US="https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json";
+
+function loadSet(){ try{const s=JSON.parse(localStorage.getItem(KEY)); if(Array.isArray(s)) return new Set(s);}catch(e){} return new Set(); }
+function saveSet(){ try{localStorage.setItem(KEY,JSON.stringify([...collected]));}catch(e){} }
+let collected=loadSet();
+
+const isShared=d=>d.libby&&!!d.shared;
+const CAT_ORDER=["WDLC shared","Independent","No Libby"];
+const CAT_COLOR={"WDLC shared":"#2ca02c","Independent":"#c2cbd9","No Libby":"#2b2b2b"};
+const CAT_LABEL={"WDLC shared":"WDLC","Independent":"Independent","No Libby":"No Libby"};
+const CAT_KEY_LABEL={"WDLC shared":"WA Anytime Library (WDLC shared)","Independent":"Independent catalog","No Libby":"No Libby"};
+const catKey=d=>!d.libby?"No Libby":(d.shared||"Independent");
+const catColor=d=>CAT_COLOR[catKey(d)];
+const gmapUrl=d=>"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(d.name+", "+d.city+", WA");
+const catalogName=s=>s.replace(/ shared$/,'');
+const libraryUrl=d=>d.url||"";
+
+const mapDiv=document.getElementById('map');
+const svg=d3.select('#map').append('svg').attr('class','stage')
+  .attr('viewBox','0 0 975 610').attr('preserveAspectRatio','xMidYMid meet');
+const defs=svg.append('defs');
+
+const g=svg.append('g');
+const gCounty=g.append('g'), gState=g.append('g'), gRail=g.append('g'), gLabel=g.append('g'), gNode=g.append('g');
+const tip=document.getElementById('tip');
+const popup=document.getElementById('popup');
+
+let projection, path, k=1;
+let lastTouchPopup=0;
+const isMobile=()=>matchMedia('(max-width:700px)').matches;
+
+const zoom=d3.zoom().scaleExtent([1,14]).on('zoom',ev=>{ g.attr('transform',ev.transform); k=ev.transform.k; rescale(); });
+
+d3.json(US).then(us=>{
+  const states=topojson.feature(us,us.objects.states).features;
+  const wa=states.find(d=>d.id==="53");
+  const counties=topojson.feature(us,us.objects.counties).features.filter(d=>String(d.id).slice(0,2)==="53");
+
+  projection=d3.geoMercator().fitExtent([[20,20],[955,590]], wa);
+  path=d3.geoPath(projection);
+
+  gCounty.selectAll('path').data(counties).join('path').attr('class','county').attr('d',path)
+    .attr('fill','#19202e').attr('fill-opacity',0.85)
+    .attr('stroke','#2c3647').attr('stroke-width',0.4);
+
+  gState.append('path').datum(wa).attr('d',path).attr('fill','none').attr('stroke','#62748c').attr('stroke-width',1.1);
+
+  const line=d3.line();
+  gRail.selectAll('path').data(RAIL).join('path').attr('class','rail')
+    .attr('d',d=>line(d.coords.map(c=>projection([c[1],c[0]]))))
+    .attr('stroke',d=>d.color).attr('stroke-width',1.5)
+    .attr('stroke-dasharray',d=>d.dash?'4,3':null).attr('opacity',.85)
+    .on('mousemove',(e,d)=>showTip(e,`<b>${d.name}</b>`)).on('mouseout',hideTip);
+
+  const cityPts=CITIES.map(c=>{const p=projection([c.lon,c.lat]); return {n:c.n,x:p?p[0]:null,y:p?p[1]:null};}).filter(c=>c.x!=null);
+  gLabel.selectAll('text').data(cityPts).join('text').attr('class','city-label')
+    .attr('x',d=>d.x).attr('y',d=>d.y).attr('dy','-7').text(d=>d.n);
+
+  DATA.forEach(d=>{const p=projection([d.lon,d.lat]); d._x=p?p[0]:null; d._y=p?p[1]:null;});
+  const node=gNode.selectAll('g.node').data(DATA.filter(d=>d._x!=null)).join('g')
+    .attr('class','node').attr('transform',d=>`translate(${d._x},${d._y})`)
+    .on('pointerdown',(e,d)=>{ if(e.pointerType!=='mouse') e.stopPropagation(); })
+    .on('pointerenter',function(e,d){ if(e.pointerType==='mouse') d3.select(this).raise().select('.dot').attr('r',dotR(d)*1.5); })
+    .on('pointermove',(e,d)=>{ if(e.pointerType==='mouse') showTip(e,tipHTML(d)); })
+    .on('pointerleave',function(e,d){ d3.select(this).select('.dot').attr('r',dotR(d)); hideTip(); })
+    .on('pointerup',(e,d)=>{
+      if(e.pointerType==='mouse') return;
+      e.stopPropagation(); e.preventDefault(); lastTouchPopup=Date.now(); hideTip(); showPopup(e.clientX,e.clientY,d);
+    })
+    .on('click',(e,d)=>{
+      e.stopPropagation();
+      if(Date.now()-lastTouchPopup<500){ e.preventDefault(); return; }
+      hideTip(); showPopup(e.clientX,e.clientY,d);
+    });
+  node.append('circle').attr('class','halo').attr('fill','#f2c14e').attr('fill-opacity',0.28).attr('stroke','none').attr('display','none');
+  node.append('circle').attr('class','dot').attr('stroke','#fff');
+  node.append('text').attr('class','chk').attr('display','none').text('\u2713');
+
+  paint();
+  initT=d3.zoomIdentity;
+  svg.call(zoom);
+  svg.on('click',()=>{ if(Date.now()-lastTouchPopup>=500) hidePopup(); });
+  const ld=document.getElementById('loading'); if(ld) ld.remove();
+}).catch(err=>{ const ld=document.getElementById('loading'); if(ld) ld.remove(); mapDiv.insertAdjacentHTML('beforeend','<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a0b3;padding:30px;text-align:center">Could not load the base map (needs internet for the Washington geometry).</div>'); console.error(err); });
+
+let initT=d3.zoomIdentity;
+function dotR(d){
+  const mobile=isMobile();
+  const base=collected.has(d.name)?(mobile?10:6):(mobile?8:5);
+  const max=collected.has(d.name)?22:18;
+  return mobile?Math.min(base/Math.sqrt(k),max/k):base/k;
+}
+function paint(){
+  gNode.selectAll('g.node').each(function(d){
+    const sel=d3.select(this), on=collected.has(d.name);
+    sel.select('.dot')
+      .attr('r',dotR(d))
+      .attr('fill', on? '#f2c14e' : catColor(d))
+      .attr('stroke', on? '#a6791f' : (!d.libby? '#cfd6e0' : '#ffffff'))
+      .attr('stroke-dasharray', d.libby? null : '2,2');
+    sel.select('.halo').attr('display', on? null : 'none');
+    sel.select('.chk').attr('display', on? null : 'none');
+  });
+  rescale();
+}
+function rescale(){
+  gNode.selectAll('.dot').attr('r',d=>dotR(d)).attr('stroke-width',1/k);
+  gNode.selectAll('.halo').attr('r',d=>dotR(d)+3.5/k);
+  gNode.selectAll('.chk').style('font-size',(11/k)+'px').attr('stroke-width',(0.6/k)+'px');
+  gRail.selectAll('path').attr('stroke-width',1.5/k);
+  gCounty.selectAll('path').attr('stroke-width',0.4/k);
+  gState.select('path').attr('stroke-width',1.1/k);
+  gLabel.selectAll('text').style('font-size',(11/k)+'px').attr('stroke-width',(3/k)+'px')
+    .attr('opacity',Math.max(0,1-(k-1)/2));
+}
+
+function tipHTML(d){
+  const kind = !d.libby? 'No Libby' : (isShared(d)? 'Shared catalog: '+catalogName(d.shared) : 'Own Libby collection');
+  return `<b>${d.name}</b><span class="meta">${d.city}, ${d.county} County &middot; ${d.region}<br>${kind}${collected.has(d.name)?' &middot; \u2713 collected':''}</span>`;
+}
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+function noteHTML(d){
+  if(!d.libby) return '';
+  if(d.shared) return `<div class="note">Part of the <b>${esc(catalogName(d.shared))}</b> (Washington Anytime Library) shared Libby catalog. One card at any WDLC member gives the same digital collection.</div>`;
+  return '<div class="note">Independent Libby collection with its own titles and waitlists.</div>';
+}
+function showPopup(x,y,d){
+  const done=collected.has(d.name);
+  popup.innerHTML=`<button class="x" aria-label="Close">&times;</button>
+    <div class="h">${esc(d.name)}</div>
+    <div class="m">${esc(d.city)}, ${esc(d.county)} County &middot; ${esc(d.region)}<br>Type: ${esc(d.system)}</div>
+    ${noteHTML(d)}
+    ${d.note?`<div class="note warn">${esc(d.note)}</div>`:''}
+    <div class="actions">
+      ${d.libby?`<button class="collect">${done?'\u2713 Collected \u2014 undo':'Mark as collected'}</button>`:''}
+      ${libraryUrl(d)?`<a class="linkbtn" href="${esc(libraryUrl(d))}" target="_blank" rel="noopener">Library card / website <span class="ext">&#8599;</span></a>`:''}
+      <a class="linkbtn" href="${gmapUrl(d)}" target="_blank" rel="noopener">Open in Google Maps <span class="ext">&#8599;</span></a>
+    </div>`;
+  popup.classList.add('show');
+  const pad=12, rect=popup.getBoundingClientRect();
+  popup.style.left=Math.max(pad,Math.min(x+pad,innerWidth-rect.width-pad))+'px';
+  popup.style.top=Math.max(pad,Math.min(y+pad,innerHeight-rect.height-pad))+'px';
+  popup.querySelector('.x').onclick=hidePopup;
+  const b=popup.querySelector('.collect');
+  if(b) b.onclick=e=>{ e.stopPropagation(); toggle(d.name); showPopup(x,y,d); };
+}
+function hidePopup(){ popup.classList.remove('show'); }
+popup.addEventListener('click',e=>e.stopPropagation());
+function showTip(e,html){ tip.innerHTML=html; tip.style.opacity=1; moveTip(e); }
+function moveTip(e){ const pad=14; let x=e.clientX+pad,y=e.clientY+pad; if(x>innerWidth-250)x=e.clientX-250; tip.style.left=x+'px'; tip.style.top=y+'px'; }
+document.addEventListener('mousemove',e=>{ if(tip.style.opacity==='1') moveTip(e); });
+document.addEventListener('click',e=>{ if(!popup.contains(e.target)) hidePopup(); });
+function hideTip(){ tip.style.opacity=0; }
+
+function toggle(name){
+  const r=DATA.find(d=>d.name===name); if(!r.libby) return;
+  const on=!collected.has(name);
+  const group=(r.libby&&r.shared)? DATA.filter(d=>d.shared===r.shared) : [r];
+  group.forEach(gd=>{ if(on) collected.add(gd.name); else collected.delete(gd.name); });
+  saveSet(); paint(); refresh();
+}
+
+const cats=CAT_ORDER.filter(c=>DATA.some(d=>catKey(d)===c));
+const collapsedCats=new Set();
+const rsel=document.getElementById('region');
+cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=CAT_KEY_LABEL[c]+' ('+DATA.filter(d=>catKey(d)===c).length+')';rsel.appendChild(o);});
+
+function passes(d){
+  const q=document.getElementById('search').value.toLowerCase().trim();
+  const rf=document.getElementById('region').value;
+  const uf=document.getElementById('uncoltoggle').checked;
+  if(rf && catKey(d)!==rf) return false;
+  if(uf && d.libby && collected.has(d.name)) return false;
+  if(q && !(d.name.toLowerCase().includes(q)||d.city.toLowerCase().includes(q)||d.county.toLowerCase().includes(q))) return false;
+  return true;
+}
+function refresh(){
+  const n=collected.size, pct=Math.round(n/TOTAL*100);
+  document.getElementById('pcount').textContent=n;
+  document.getElementById('pct').textContent=pct+'%';
+  const C=2*Math.PI*22; document.getElementById('ringfg').setAttribute('stroke-dashoffset', C*(1-n/TOTAL));
+  gNode.selectAll('g.node').attr('opacity',d=>passes(d)?1:0.12).style('pointer-events',d=>passes(d)?null:'none');
+  renderList();
+}
+function renderList(){
+  const list=document.getElementById('list');
+  const prevTop=list.scrollTop, prevH=list.scrollHeight;
+  list.innerHTML=''; let cur=null;
+  const rows=DATA.filter(passes).slice().sort((a,b)=>(CAT_ORDER.indexOf(catKey(a))-CAT_ORDER.indexOf(catKey(b)))||a.name.localeCompare(b.name));
+  rows.forEach(d=>{
+    const ckey=catKey(d);
+    if(ckey!==cur){cur=ckey;const h=document.createElement('div');h.className='grp';
+      const collapsed=collapsedCats.has(ckey), n=rows.filter(r=>catKey(r)===ckey).length;
+      h.tabIndex=0; h.setAttribute('role','button'); h.setAttribute('aria-expanded', String(!collapsed));
+      h.innerHTML=`<span class="chev">${collapsed?'\u25b8':'\u25be'}</span><span class="gdot" style="background:${CAT_COLOR[ckey]};border:1px solid rgba(255,255,255,.25)"></span>${CAT_KEY_LABEL[ckey]}<span class="cnt">${n}</span>`;
+      h.onclick=()=>{ collapsed ? collapsedCats.delete(ckey) : collapsedCats.add(ckey); renderList(); };
+      h.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); h.click(); } };
+      list.appendChild(h);}
+    if(collapsedCats.has(ckey)) return;
+    const on=collected.has(d.name);
+    const it=document.createElement('div'); it.className='item'+(on?' done':'');
+    const tag=!d.libby?' \u2014 no Libby':(isShared(d)?' \u00b7 shared':' \u00b7 own');
+    const cb=d.libby?`<input type="checkbox" ${on?'checked':''}>`:`<span style="width:15px;flex:none"></span>`;
+    it.innerHTML=`${cb}<div class="meta"><div class="nm">${d.name}</div><div class="loc">${d.city}, ${d.county} Co.${tag}</div></div><a class="gm" href="${gmapUrl(d)}" target="_blank" rel="noopener" title="Open in Google Maps">&#8599;</a>`;
+    const ck=it.querySelector('input'); if(ck) ck.addEventListener('click',e=>{e.stopPropagation();toggle(d.name);});
+    const gm=it.querySelector('a.gm'); if(gm) gm.addEventListener('click',e=>e.stopPropagation());
+    it.addEventListener('click',()=>flyTo(d));
+    list.appendChild(it);
+  });
+  if(list.scrollHeight>=prevH) list.scrollTop=prevTop;
+  else list.scrollTop=0;
+}
+function flyTo(d){
+  if(d._x==null) return;
+  const t=d3.zoomIdentity.translate(975/2,610/2).scale(8).translate(-d._x,-d._y);
+  svg.transition().duration(800).call(zoom.transform,t);
+  if(isMobile()) setSideOpen(false);
+}
+
+document.getElementById('search').addEventListener('input',refresh);
+document.getElementById('region').addEventListener('change',refresh);
+document.getElementById('uncoltoggle').addEventListener('change',refresh);
+document.getElementById('resetview').onclick=()=>svg.transition().duration(700).call(zoom.transform,initT);
+const confirmClear=document.getElementById('confirmclear');
+function closeConfirmClear(){ confirmClear.classList.remove('show'); }
+document.getElementById('clearmine').onclick=()=>confirmClear.classList.add('show');
+document.getElementById('confirmclearclose').onclick=closeConfirmClear;
+document.getElementById('confirmclearno').onclick=closeConfirmClear;
+document.getElementById('confirmclearyes').onclick=()=>{ collected=new Set(); saveSet(); paint(); refresh(); closeConfirmClear(); };
+confirmClear.addEventListener('click',e=>{ if(e.target===confirmClear) closeConfirmClear(); });
+document.getElementById('railtoggle').onchange=function(){ gRail.attr('display',this.checked?null:'none'); };
+document.getElementById('zin').onclick=()=>svg.transition().duration(250).call(zoom.scaleBy,1.6);
+document.getElementById('zout').onclick=()=>svg.transition().duration(250).call(zoom.scaleBy,1/1.6);
+document.getElementById('menubtn').onclick=()=>{
+  setSideOpen(!document.getElementById('side').classList.contains('open'));
+};
+function setSideOpen(open){
+  const side=document.getElementById('side');
+  side.classList.toggle('open',open);
+  const btn=document.getElementById('menubtn');
+  btn.innerHTML=open?'&times;':'&#9776;';
+  btn.setAttribute('aria-expanded',String(open));
+}
+
+(function(){
+  let catrows=cats.map(c=>`<div class="li"><span class="swatch" style="background:${CAT_COLOR[c]};border-radius:50%;border:1px solid rgba(255,255,255,.3)"></span>${CAT_KEY_LABEL[c]}</div>`).join('');
+  let seen={},rl='';
+  RAIL.forEach(r=>{ if(!seen[r.op]){seen[r.op]=1; rl+=`<div class="li"><span class="rsw" style="border-top-color:${r.color};${r.dash?'border-top-style:dashed;':''}"></span>${r.op}</div>`;} });
+  const legend=document.getElementById('legend');
+  legend.innerHTML=`<details class="catkey" open><summary>Catalog color</summary>${catrows}</details>
+    <details><summary>Rail lines</summary>${rl}</details>`;
+  if(matchMedia('(max-width:700px)').matches) legend.querySelector('.catkey').removeAttribute('open');
+})();
+
+const aboutEl=document.getElementById('about');
+document.getElementById('infobtn').onclick=()=>aboutEl.classList.add('show');
+document.getElementById('aboutclose').onclick=()=>aboutEl.classList.remove('show');
+document.getElementById('aboutok').onclick=()=>aboutEl.classList.remove('show');
+aboutEl.addEventListener('click',e=>{if(e.target===aboutEl)aboutEl.classList.remove('show');});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){aboutEl.classList.remove('show');closeConfirmClear();}});
+try{ if(!localStorage.getItem('library_quest_wa_about_seen')){ aboutEl.classList.add('show'); localStorage.setItem('library_quest_wa_about_seen','1'); } }catch(e){}
+
+refresh();
+</script>
+</body>
+</html>"""
+
+out=(HTML.replace("__DATA__",data_json)
+        .replace("__RAIL__",rail_json)
+        .replace("__TOTAL__",str(total_libby)))
+open("washington.html","w", encoding="utf-8").write(out)
+print("wrote Washington map, bytes:",len(out),"libby:",total_libby)
