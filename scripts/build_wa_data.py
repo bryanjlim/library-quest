@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Build the Washington Libby library-systems dataset -> wa_libraries.json
 
-Washington differs from California: there is no statewide open-borrowing policy.
-Instead, library systems have pairwise reciprocal borrowing agreements.
+Washington library systems have pairwise reciprocal borrowing agreements.
 Most smaller systems share one Libby catalog — the Washington Digital Library
 Consortium (WDLC), branded "Washington Anytime Library."  The largest systems
 maintain their own independent Libby/OverDrive collections.
