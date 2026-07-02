@@ -21,11 +21,23 @@ California residents can get a library card at any public library system in the 
 ```
 data/ca_libraries.json     # the dataset (182 systems: name, county, system, region, shared catalog, coords, libby flag)
 data/ca_library_urls.json  # official library card / website links for every system
+data/state_access.json     # access-model research for the 47 states without a map page yet
 scripts/build_data.py      # generates data/ca_libraries.json
 scripts/build_california.py # builds california.html from the data
 index.html                 # home page
 california.html            # built California app
 ```
+
+## State access research
+
+`data/state_access.json` covers every state except California, New York, and Washington (those get full map pages). Each entry has an `access_model`:
+
+- **statewide** — residents can get a card at essentially any public library in the state (like California)
+- **reciprocal** — access beyond your home library varies by reciprocal agreements between systems (like Washington)
+- **local** — cards are mostly limited to each library's own service area
+- **statewide-consortium** — most libraries share one statewide Libby catalog, so extra cards add little
+
+Plus the major shared Libby/OverDrive consortium (if any), a reader-facing summary, and source URLs. Findings were researched from official state library and consortium sites, then independently fact-checked; the home page state cards are generated from this file.
 
 ## Rebuilding
 
